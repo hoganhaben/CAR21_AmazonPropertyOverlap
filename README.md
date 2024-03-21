@@ -11,4 +11,5 @@ It contains 3 Rmd files
 4. CAR21_temporalANOVAS.Rmd - this file contains Analysis of Variance to test whether CAR21 property overlap is increasing over time.
 
 It also contains 3 figures which appear in the main text or supporing information appendix of the manuscript. 
-for questions regarding the details of the study, hypothese of the datset please contact Paul Furmo (pfurumo at gmail dot com). 
+
+For questions regarding the details of the study, hypothese of the datset please contact Paul Furmo (pfurumo at gmail dot com). 
