@@ -1,0 +1,518 @@
+---
+title: "CAR21_Chi_Sq"
+author: "JAH"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    toc_collapsed: yes
+    toc_depth: 3
+    
+---
+
+
+```{r include=FALSE}
+knitr::opts_chunk$set(tidy.opts=list(width.cutoff=60),tidy=TRUE, echo = TRUE, message = TRUE, warning = FALSE)
+```
+
+```{r wrap-hook, echo = FALSE}
+library(knitr)
+hook_output = knit_hooks$get('output')
+knit_hooks$set(output = function(x, options) {
+  # this hook is used only when the linewidth option is not NULL
+  if (!is.null(n <- options$linewidth)) {
+    x = knitr:::split_lines(x)
+    # any lines wider than n should be wrapped
+    if (any(nchar(x) > n)) x = strwrap(x, width = n)
+    x = paste(x, collapse = '\n')
+  }
+  hook_output(x, options)
+})
+```
+
+
+```{r}
+## set scientific notation to a large number -- to accomodate very small numbers as decimals
+options(scipen = 9999)
+
+
+library(readr); library(tidyverse)
+
+### read in the CAR Chi Square muni DATA
+def_dat <- read_csv("lr_contingency_table_112123.csv",
+                  col_types = cols(state = col_factor(levels = c("AC","AM","AP","MT","PA","RO"))))
+
+
+
+# rm(codes)  ## get rid of codes dataframe
+
+### ^^^^ above is the read in the old file for v1 from May 2023
+
+# 
+# ## overwrite small negative numbers to 0
+# 
+# def_dat[def_dat$ov_lr < 0,]$ov_lr <- 0
+# 
+# def_dat[def_dat$ov_nlr < 0,]$ov_nlr <- 0
+
+### one negative record for AM
+# 
+#  muni_code state ov_def   ov_nlr nov_lr nov_nlr
+#       <dbl> <fct>  <dbl>     <dbl>   <dbl>    <dbl>
+# 1   1303601 AM         0 -4.26e-14    10.6     79.8
+
+```
+
+```{r}
+### data summarizing by state
+state_def_dat <- def_dat %>% group_by(state) %>% summarize(ov_lr = sum(ov_lr), ov_nlr = sum(ov_nlr), nov_lr = sum(nov_lr), nov_nlr = sum(nov_nlr))
+
+state_def_dat <- as.data.frame(state_def_dat)
+```
+
+
+# Chi-squared tests -- by state
+
+## Acre (AC)
+```{r}
+## set up the matrix
+ac.mat <- as.table(rbind(
+          c(state_def_dat[state_def_dat$state == "AC","ov_lr"], state_def_dat[state_def_dat$state == "AC","ov_nlr"]), 
+          c(state_def_dat[state_def_dat$state == "AC","nov_lr"], state_def_dat[state_def_dat$state == "AC","nov_nlr"])))
+
+dimnames(ac.mat) <- list(c("overlap", "no-overlap"),
+                         c("legal reserve", "NON-legal reserve"))
+
+### run the test
+Xsq.ac <- chisq.test(ac.mat)
+
+## print statistic
+Xsq.ac
+
+Xsq.ac$observed   # observed counts (same as ac.mat)
+Xsq.ac$expected   # expected counts under the null
+# Xsq.ac$residuals  # Pearson residuals
+# Xsq.ac$stdres     # standardized residuals
+
+## statistical statement
+paste("CONCLUSION: observed legal reserve area in the overlaps is ",round((1 + (Xsq.ac$observed[1]-Xsq.ac$expected[1]) / Xsq.ac$expected[1]) * 100),"% of the expected legal reserve in the property overlaps (p < 0.001)")
+
+```
+
+## Amazonas (AM)
+```{r}
+## set up the matrix
+am.mat <- as.table(rbind(
+          c(state_def_dat[state_def_dat$state == "AM","ov_lr"], state_def_dat[state_def_dat$state == "AM","ov_nlr"]), 
+          c(state_def_dat[state_def_dat$state == "AM","nov_lr"], state_def_dat[state_def_dat$state == "AM","nov_nlr"])))
+
+dimnames(am.mat) <- list(c("overlap", "no-overlap"),
+                         c("legal reserve", "NON-legal reserve"))
+
+### run the test
+Xsq.am <- chisq.test(am.mat)
+
+## print statistic
+Xsq.am
+
+Xsq.am$observed   # observed counts (same as am.mat)
+Xsq.am$expected   # expected counts under the null
+# Xsq.am$residuals  # Pearson residuals
+# Xsq.am$stdres     # standardized residuals
+
+## statistical statement
+paste("CONCLUSION: observed legal reserve area in the overlaps is ",round((1 + (Xsq.am$observed[1]-Xsq.am$expected[1]) / Xsq.am$expected[1]) * 100),"% of the expected legal reserve in the property overlaps (p < 0.001)")
+
+```
+
+
+## Amapa (AP)
+```{r}
+## set up the matrix
+ap.mat <- as.table(rbind(
+          c(state_def_dat[state_def_dat$state == "AP","ov_lr"], state_def_dat[state_def_dat$state == "AP","ov_nlr"]), 
+          c(state_def_dat[state_def_dat$state == "AP","nov_lr"], state_def_dat[state_def_dat$state == "AP","nov_nlr"])))
+
+dimnames(ap.mat) <- list(c("overlap", "no-overlap"),
+                         c("legal reserve", "NON-legal reserve"))
+
+### run the test
+Xsq.ap <- chisq.test(ap.mat)
+
+## print statistic
+Xsq.ap
+
+Xsq.ap$observed   # observed counts (same as ap.mat)
+Xsq.ap$expected   # expected counts under the null
+# Xsq.ap$residuals  # Pearson residuals
+# Xsq.ap$stdres     # standardized residuals
+
+## statistical statement
+paste("CONCLUSION: observed legal reserve area in the overlaps is ",round((1 + (Xsq.ap$observed[1]-Xsq.ap$expected[1]) / Xsq.ap$expected[1]) * 100),"% of the expected legal reserve in the property overlaps (p < 0.001)")
+
+```
+
+
+## Maranhao (MA - missing)
+```{r}
+
+```
+
+## Mato Grosso (MT)
+```{r}
+## set up the matrix
+mt.mat <- as.table(rbind(
+          c(state_def_dat[state_def_dat$state == "MT","ov_lr"], state_def_dat[state_def_dat$state == "MT","ov_nlr"]), 
+          c(state_def_dat[state_def_dat$state == "MT","nov_lr"], state_def_dat[state_def_dat$state == "MT","nov_nlr"])))
+
+dimnames(mt.mat) <- list(c("overlap", "no-overlap"),
+                         c("legal reserve", "NON-legal reserve"))
+
+### run the test
+Xsq.mt <- chisq.test(mt.mat)
+
+## print statistic
+Xsq.mt
+
+Xsq.mt$observed   # observed counts (same as mt.mat)
+Xsq.mt$expected   # expected counts under the null
+# Xsq.mt$residuals  # Pearson residuals
+# Xsq.mt$stdres     # standardized residuals
+
+## statistical statement
+paste("CONCLUSION: observed legal reserve area in the overlaps is ",round((1 + (Xsq.mt$observed[1]-Xsq.mt$expected[1]) / Xsq.mt$expected[1]) * 100),"% of the expected legal reserve in the property overlaps (p < 0.001)")
+
+```
+
+
+## Para (PA)
+```{r}
+## set up the matrix
+pa.mat <- as.table(rbind(
+          c(state_def_dat[state_def_dat$state == "PA","ov_lr"], state_def_dat[state_def_dat$state == "PA","ov_nlr"]), 
+          c(state_def_dat[state_def_dat$state == "PA","nov_lr"], state_def_dat[state_def_dat$state == "PA","nov_nlr"])))
+
+dimnames(pa.mat) <- list(c("overlap", "no-overlap"),
+                         c("legal reserve", "NON-legal reserve"))
+
+### run the test
+Xsq.pa <- chisq.test(pa.mat)
+
+## print statistic
+Xsq.pa
+
+Xsq.pa$observed   # observed counts (same as pa.mat)
+Xsq.pa$expected   # expected counts under the null
+# Xsq.pa$residuals  # Pearson residuals
+# Xsq.pa$stdres     # standardized residuals
+
+## statistical statement
+paste("CONCLUSION: observed legal reserve area in the overlaps is ",round((1 + (Xsq.pa$observed[1]-Xsq.pa$expected[1]) / Xsq.pa$expected[1]) * 100),"% of the expected legal reserve in the property overlaps (p < 0.001)")
+
+```
+
+## Rondonia (RO)
+```{r}
+## set up the matrix
+ro.mat <- as.table(rbind(
+          c(state_def_dat[state_def_dat$state == "RO","ov_lr"], state_def_dat[state_def_dat$state == "RO","ov_nlr"]), 
+          c(state_def_dat[state_def_dat$state == "RO","nov_lr"], state_def_dat[state_def_dat$state == "RO","nov_nlr"])))
+
+dimnames(ro.mat) <- list(c("overlap", "no-overlap"),
+                         c("legal reserve", "NON-legal reserve"))
+
+### run the test
+Xsq.ro <- chisq.test(ro.mat)
+
+## print statistic
+Xsq.ro
+
+Xsq.ro$observed   # observed counts (same as ro.mat)
+Xsq.ro$expected   # expected counts under the null
+# Xsq.ro$residuals  # Pearson residuals
+# Xsq.ro$stdres     # standardized residuals
+
+## statistical statement
+paste("CONCLUSION: observed legal reserve area in the overlaps is ",round((1 + (Xsq.ro$observed[1]-Xsq.ro$expected[1]) / Xsq.ro$expected[1]) * 100),"% of the expected legal reserve in the property overlaps (p < 0.001)")
+```
+
+## Roraima (RR - missing)
+```{r}
+
+```
+
+## Tocatins (TO - missing)
+```{r}
+
+```
+
+
+
+# Chi-squared tests -- by municipality within states
+
+## Acre (AC)
+```{r, warning = FALSE}
+## create placeholder dataframe
+ac_muni_Xsq <- def_dat[def_dat$state == "AC",2:1]
+ac_muni_Xsq$Xsq_stat <- -9999
+ac_muni_Xsq$p <- -9999
+ac_muni_Xsq$observed <- -9999
+ac_muni_Xsq$expected <- -9999
+
+##  run for loop
+for(i in 1:nrow(def_dat[def_dat$state == "AC",])) {
+  muni <- def_dat[def_dat$state == "AC",][i,]
+  
+  muni.mat <- matrix(data = unlist(c(muni[,"ov_lr"], muni[,"ov_nlr"], 
+                     muni[,"nov_lr"], muni[,"nov_nlr"])), ncol = 2, 
+                     byrow = T)
+  
+  dimnames(muni.mat) <- list(c("overlap", "no-overlap"),
+                             c("legal reserve", "NON-legal reserve"))
+  
+  Xsq.muni <- chisq.test(muni.mat)
+  
+  ac_muni_Xsq$Xsq_stat[i] <- Xsq.muni$statistic
+  ac_muni_Xsq$p[i] <- Hmisc::format.pval(Xsq.muni$p.value )
+  ac_muni_Xsq$observed[i] <- Xsq.muni$observed[1]
+  ac_muni_Xsq$expected[i] <- Xsq.muni$expected[1]
+  
+}
+
+###
+ac_muni_Xsq$Signif <- ac_muni_Xsq$p <0.05
+ac_muni_Xsq$More_OR_Less_Deforestaion_Overlap <-  ac_muni_Xsq$observed >  ac_muni_Xsq$expected
+
+knitr::kable(ac_muni_Xsq, format = "simple")
+
+## municipality hypothesis testing statement
+paste("CONCLUSION: observed legal reserve in property overlaps is greater than the Chi-Squared expected legal reserve in the property overlaps in ", nrow(ac_muni_Xsq[ac_muni_Xsq$More_OR_Less_Deforestaion_Overlap == TRUE & ac_muni_Xsq$Signif == TRUE,]), " of ", length(ac_muni_Xsq$cod_ibge), " municipalities in Acre state", sep ="")
+```
+
+## Amazonas (AM)
+```{r, warning = FALSE}
+## fix issues related
+
+
+## create placeholder dataframe
+am_muni_Xsq <- def_dat[def_dat$state == "AM",2:1]
+am_muni_Xsq$Xsq_stat <- -9999
+am_muni_Xsq$p <- -9999
+am_muni_Xsq$observed <- -9999
+am_muni_Xsq$expected <- -9999
+
+##  run for loop
+for(i in 1:nrow(def_dat[def_dat$state == "AM",])) {
+  muni <- def_dat[def_dat$state == "AM",][i,]
+  
+  muni.mat <- matrix(data = unlist(c(muni[,"ov_lr"], muni[,"ov_nlr"], 
+                     muni[,"nov_lr"], muni[,"nov_nlr"])), ncol = 2, 
+                     byrow = T)
+  
+  dimnames(muni.mat) <- list(c("overlap", "no-overlap"),
+                             c("legal reserve", "NON-legal reserve"))
+  
+  Xsq.muni <- chisq.test(muni.mat)
+  
+  am_muni_Xsq$Xsq_stat[i] <- Xsq.muni$statistic
+  am_muni_Xsq$p[i] <- Hmisc::format.pval(Xsq.muni$p.value)
+  am_muni_Xsq$observed[i] <- Xsq.muni$observed[1]
+  am_muni_Xsq$expected[i] <- Xsq.muni$expected[1]
+  
+}
+
+###
+am_muni_Xsq$Signif <- am_muni_Xsq$p <0.05
+am_muni_Xsq$More_OR_Less_Deforestaion_Overlap <-  am_muni_Xsq$observed <  am_muni_Xsq$expected
+
+knitr::kable(am_muni_Xsq, format = "simple")
+
+## municipality hypothesis testing statement
+paste("CONCLUSION: observed legal reserve in property overlaps is *LESS* than the Chi-Squared expected legal reserve in the property overlaps in ", nrow(am_muni_Xsq[am_muni_Xsq$More_OR_Less_Deforestaion_Overlap == TRUE & am_muni_Xsq$Signif == TRUE,]), " of ", length(am_muni_Xsq$cod_ibge), " municipalities in Amazonas state", sep ="")
+```
+
+## Amapa (AP)
+```{r, warning = FALSE}
+## create placeholder dataframe
+ap_muni_Xsq <- def_dat[def_dat$state == "AP",2:1]
+ap_muni_Xsq$Xsq_stat <- -9999
+ap_muni_Xsq$p <- -9999
+ap_muni_Xsq$observed <- -9999
+ap_muni_Xsq$expected <- -9999
+
+##  run for loop
+for(i in 1:nrow(def_dat[def_dat$state == "AP",])) {
+  muni <- def_dat[def_dat$state == "AP",][i,]
+  
+  muni.mat <- matrix(data = unlist(c(muni[,"ov_lr"], muni[,"ov_nlr"], 
+                     muni[,"nov_lr"], muni[,"nov_nlr"])), ncol = 2, 
+                     byrow = T)
+  
+  dimnames(muni.mat) <- list(c("overlap", "no-overlap"),
+                             c("legal reserve", "NON-legal reserve"))
+  
+  Xsq.muni <- chisq.test(muni.mat)
+  
+  ap_muni_Xsq$Xsq_stat[i] <- Xsq.muni$statistic
+  ap_muni_Xsq$p[i] <- Hmisc::format.pval(Xsq.muni$p.value)
+  ap_muni_Xsq$observed[i] <- Xsq.muni$observed[1]
+  ap_muni_Xsq$expected[i] <- Xsq.muni$expected[1]
+  
+}
+
+###
+ap_muni_Xsq$Signif <- ap_muni_Xsq$p <0.05
+ap_muni_Xsq$More_OR_Less_Deforestaion_Overlap <-  ap_muni_Xsq$observed >  ap_muni_Xsq$expected
+
+knitr::kable(ap_muni_Xsq, format = "simple")
+
+## municipality hypothesis testing statement
+paste("CONCLUSION: observed legal reserve in property overlaps is greater than the Chi-Squared expected legal reserve in the property overlaps in ", nrow(ap_muni_Xsq[ap_muni_Xsq$More_OR_Less_Deforestaion_Overlap == TRUE & ap_muni_Xsq$Signif == TRUE,]), " of ", length(ap_muni_Xsq$cod_ibge), " municipalities in Amapa state", sep ="")
+```
+
+## Maranhao (MA - missing)
+```{r}
+
+```
+
+## Mato Grosso (MT)
+```{r, warning = FALSE}
+## create placeholder dataframe
+mt_muni_Xsq <- def_dat[def_dat$state == "MT",2:1]
+mt_muni_Xsq$Xsq_stat <- -9999
+mt_muni_Xsq$p <- -9999
+mt_muni_Xsq$observed <- -9999
+mt_muni_Xsq$expected <- -9999
+
+##  run for loop
+for(i in 1:nrow(def_dat[def_dat$state == "MT",])) {
+  muni <- def_dat[def_dat$state == "MT",][i,]
+  
+  muni.mat <- matrix(data = unlist(c(muni[,"ov_lr"], muni[,"ov_nlr"], 
+                     muni[,"nov_lr"], muni[,"nov_nlr"])), ncol = 2, 
+                     byrow = T)
+  
+  dimnames(muni.mat) <- list(c("overlap", "no-overlap"),
+                             c("legal reserve", "NON-legal reserve"))
+  
+  Xsq.muni <- chisq.test(muni.mat)
+  
+  mt_muni_Xsq$Xsq_stat[i] <- Xsq.muni$statistic
+  mt_muni_Xsq$p[i] <- Hmisc::format.pval(Xsq.muni$p.value)
+  mt_muni_Xsq$observed[i] <- Xsq.muni$observed[1]
+  mt_muni_Xsq$expected[i] <- Xsq.muni$expected[1]
+  
+}
+
+###
+mt_muni_Xsq$Signif <- mt_muni_Xsq$p <0.05
+mt_muni_Xsq$More_OR_Less_Deforestaion_Overlap <-  mt_muni_Xsq$observed >  mt_muni_Xsq$expected
+
+knitr::kable(mt_muni_Xsq, format = "simple")
+
+## municipality hypothesis testing statement
+paste("CONCLUSION: observed legal reserve in property overlaps is greater than the Chi-Squared expected legal reserve in the property overlaps in ", nrow(mt_muni_Xsq[mt_muni_Xsq$More_OR_Less_Deforestaion_Overlap == TRUE & mt_muni_Xsq$Signif == TRUE,]), " of ", length(mt_muni_Xsq$cod_ibge), " municipalities in Mato Grosso state", sep ="")
+```
+
+## Para (PA)
+```{r, warning = FALSE}
+## create placeholder dataframe
+pa_muni_Xsq <- def_dat[def_dat$state == "PA",2:1]
+pa_muni_Xsq$Xsq_stat <- -9999
+pa_muni_Xsq$p <- -9999
+pa_muni_Xsq$observed <- -9999
+pa_muni_Xsq$expected <- -9999
+
+##  run for loop
+for(i in 1:nrow(def_dat[def_dat$state == "PA",])) {
+  muni <- def_dat[def_dat$state == "PA",][i,]
+  
+  muni.mat <- matrix(data = unlist(c(muni[,"ov_lr"], muni[,"ov_nlr"], 
+                     muni[,"nov_lr"], muni[,"nov_nlr"])), ncol = 2, 
+                     byrow = T)
+  
+  dimnames(muni.mat) <- list(c("overlap", "no-overlap"),
+                             c("legal reserve", "NON-legal reserve"))
+  
+  Xsq.muni <- chisq.test(muni.mat)
+  
+  pa_muni_Xsq$Xsq_stat[i] <- Xsq.muni$statistic
+  pa_muni_Xsq$p[i] <- Hmisc::format.pval(Xsq.muni$p.value)
+  pa_muni_Xsq$observed[i] <- Xsq.muni$observed[1]
+  pa_muni_Xsq$expected[i] <- Xsq.muni$expected[1]
+  
+}
+
+###
+pa_muni_Xsq$Signif <- pa_muni_Xsq$p <0.05
+pa_muni_Xsq$More_OR_Less_Deforestaion_Overlap <-  pa_muni_Xsq$observed >  pa_muni_Xsq$expected
+
+knitr::kable(pa_muni_Xsq, format = "simple")
+
+## municipality hypothesis testing statement
+paste("CONCLUSION: observed legal reserve in property overlaps is greater than the Chi-Squared expected legal reserve in the property overlaps in ", nrow(pa_muni_Xsq[pa_muni_Xsq$More_OR_Less_Deforestaion_Overlap == TRUE & pa_muni_Xsq$Signif == TRUE,]), " of ", length(pa_muni_Xsq$cod_ibge), " municipalities in Para state", sep ="")
+```
+
+## Rondonia (RO)
+```{r, warning = FALSE}
+## create placeholder dataframe
+ro_muni_Xsq <- def_dat[def_dat$state == "RO",2:1]
+ro_muni_Xsq$Xsq_stat <- -9999
+ro_muni_Xsq$p <- -9999
+ro_muni_Xsq$observed <- -9999
+ro_muni_Xsq$expected <- -9999
+
+##  run for loop
+for(i in 1:nrow(def_dat[def_dat$state == "RO",])) {
+  muni <- def_dat[def_dat$state == "RO",][i,]
+  
+  muni.mat <- matrix(data = unlist(c(muni[,"ov_lr"], muni[,"ov_nlr"], 
+                     muni[,"nov_lr"], muni[,"nov_nlr"])), ncol = 2, 
+                     byrow = T)
+  
+  dimnames(muni.mat) <- list(c("overlap", "no-overlap"),
+                             c("legal reserve", "NON-legal reserve"))
+  
+  Xsq.muni <- chisq.test(muni.mat)
+  
+  ro_muni_Xsq$Xsq_stat[i] <- Xsq.muni$statistic
+  ro_muni_Xsq$p[i] <- Hmisc::format.pval(Xsq.muni$p.value)
+  ro_muni_Xsq$observed[i] <- Xsq.muni$observed[1]
+  ro_muni_Xsq$expected[i] <- Xsq.muni$expected[1]
+  
+}
+
+###
+ro_muni_Xsq$Signif <- ro_muni_Xsq$p <0.05
+ro_muni_Xsq$More_OR_Less_Deforestaion_Overlap <-  ro_muni_Xsq$observed >  ro_muni_Xsq$expected
+
+knitr::kable(ro_muni_Xsq, format = "simple")
+
+## municipality hypothesis testing statement
+paste("CONCLUSION: observed legal reserve in property overlaps is greater than the Chi-Squared expected legal reserve in the property overlaps in ", nrow(ro_muni_Xsq[ro_muni_Xsq$More_OR_Less_Deforestaion_Overlap == TRUE & ro_muni_Xsq$Signif == TRUE,]), " of ", length(ro_muni_Xsq$cod_ibge), " municipalities in Rondonia state", sep ="")
+```
+
+## Roraima (RR - missing)
+```{r}
+
+```
+
+## Tocatins (TO - missing)
+```{r}
+
+```
+
+
+
+```{r}
+### combine muni Chi-squared frames
+
+muni_Xsq <- rbind(ac_muni_Xsq, am_muni_Xsq, ap_muni_Xsq, mt_muni_Xsq, pa_muni_Xsq, ro_muni_Xsq)
+
+
+write.csv(muni_Xsq, file = "CAR21_overlap_legal reserve_muni_Chi_Squared.csv")
+```
+
+
+

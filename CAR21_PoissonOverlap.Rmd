@@ -1,0 +1,1243 @@
+---
+title: "CAR21_PoissonModels"
+author: "JAH"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    toc_collapsed: yes
+    toc_depth: 3
+---
+
+```{r include=FALSE}
+knitr::opts_chunk$set(tidy.opts=list(width.cutoff=60), cache = T, echo = TRUE, message = FALSE, warning = FALSE, cache.lazy = T)
+```
+
+```{r}
+library(readr)
+library(sjPlot)  ## for plotting
+library(lme4)
+```
+
+```{r}
+# ### read in the data
+# 
+# CAR21 <- read_csv(#"/blue/gerber/hogan.jaaron/CAR21/CAR21.csv",
+#                   "C:/Users/hogie/Dropbox/R WD/CAR21/CAR21.csv",
+#                   col_types = cols(biome = col_factor(levels = c("amazon","cerrado","pantanal")), 
+#                                    state = col_factor(levels = c("AC","AM","AP","MA","MT","PA","RO","RR","TO")), 
+#                                    year = col_factor(levels = c("2014","2015","2016","2017","2018","2019","2020","2021")),
+#                                    landholder_size = col_factor(levels = c("small","medium","large")), 
+#                                    titled = col_factor(levels = c("0","1")), 
+#                                    AST_PCT = col_factor(levels = c("0","1")), 
+#                                    und_all = col_factor(levels = c("0","1")), 
+#                                    blacklist = col_factor(levels = c("0","1")), 
+#                                    ))
+# 
+# CAR21$municipio <- as.factor(CAR21$municipio)
+# 
+# ## subset the data to only land parcels >=1 Ha
+# CAR21 <- subset(CAR21, area_prop >= 1) #Remove properties less than 1 hectare in size
+```
+
+```{r}
+# ## read in the overlap stats data -- 08/02/2023
+# 
+# overlap_stats <-  read_csv("C:/Users/hogie/Dropbox/R WD/CAR21/CAR21_overlap_statistics_090323.csv",)
+```
+
+```{r}
+# ### merge in the other data 
+# 
+# CAR21 <- merge(CAR21, overlap_stats[,c("cod_imovel", "prop_area_2021", "num_overlaps_1ha_buffer_2021", "area_overlap_2021")], by = "cod_imovel")
+
+```
+
+```{r}
+library(readr)
+
+CAR21 <- read_csv("CAR21_GLMMs_dataset_oct_FINAL.csv", 
+                      col_types = cols(landholder_size = col_factor(levels = c("small",  "medium", "large")), 
+                                        biome = col_factor(levels = c("amazon","cerrado","pantanal")), 
+                                        state = col_factor(levels = c("AC","AM","AP","MA","MT","PA","RO","RR","TO")),
+                                        year = col_factor(levels = c("2014","2015","2016","2017","2018","2019","2020","2021")),
+                                        landholder_size = col_factor(levels = c("small","medium","large")),
+                                        titled = col_factor(levels = c("0","1")),
+                                        AST = col_factor(levels = c("0","1")),
+                                        AST_INCRA = col_factor(levels = c("0","1")),
+                                        und_all = col_factor(levels = c("0","1")),
+                                        blacklist = col_factor(levels = c("0","1")),
+                                        ))
+
+```
+
+
+
+# first look at the data a bit
+
+## number of overlaps
+
+### histogram
+```{r}
+hist(CAR21$num_overlaps_1ha_buffer_2021, xlim = c(0,25), breaks = seq(0, max(CAR21$num_overlaps_1ha_buffer_2021)+1, by = 1), las = 1, main = NULL)
+
+hist(CAR21$num_overlaps_1ha_buffer_2021, breaks = seq(0, max(CAR21$num_overlaps_1ha_buffer_2021)+1, by = 1), las = 1, main = NULL)
+```
+
+### histogram - log y-axis
+```{r}
+# original data
+
+hist.data <- hist(CAR21$num_overlaps_1ha_buffer_2021, breaks = seq(0, max(CAR21$num_overlaps_1ha_buffer_2021, na.rm = T)+1, by = 1), plot = F)
+
+plot(hist.data$counts, log="y", type='h')
+
+plot(hist.data$counts, log="y", type='h', xlim = c(0,250))
+
+```
+
+### table
+```{r}
+table(CAR21$num_overlaps_1ha_buffer_2021)
+```
+
+
+
+```{r}
+## scale and center predictors 
+CAR21_scaled <- CAR21
+
+CAR21_scaled$pub_claims_slim_muni <- scale(CAR21_scaled$pub_claims_slim_muni)
+CAR21_scaled$priv_claims_muni_NEW <- scale(CAR21_scaled$priv_claims_muni_NEW)
+CAR21_scaled$pop_km2 <- scale(CAR21_scaled$pop_km2)
+CAR21_scaled$pop_rural_km2 <- scale(CAR21_scaled$pop_rural_km2)
+CAR21_scaled$pop_growth <- scale(CAR21_scaled$pop_growth)
+
+CAR21_scaled$dist_road <- scale(CAR21_scaled$dist_road)
+CAR21_scaled$slope <- scale(CAR21_scaled$slope)
+CAR21_scaled$forest_cover_muni <- scale(CAR21_scaled$forest_cover_muni)
+CAR21_scaled$credit_km2 <- scale(CAR21_scaled$credit_km2)
+CAR21_scaled$livestock_km2 <- scale(CAR21_scaled$livestock_km2)
+CAR21_scaled$livestock_growth <- scale(CAR21_scaled$livestock_growth)
+CAR21_scaled$log_prop_area_2021 <- scale(log(CAR21_scaled$prop_area_2021))   ## note: log transformed prop area 2021
+
+```
+
+# FITTING MODELS
+
+## POISSON models for number of overlaps
+
+### mod 1
+
+```{r, cache =T}
+all.pois1 <- glmer(num_overlaps_1ha_buffer_2021 ~ log_prop_area_2021 + priv_claims_muni_NEW + pop_km2 + pop_growth + #pub_claims_slim_muni + + pop_rural_km2 +   #land_scarcity_vars  
+                  titled + und_all + blacklist + #land_conflict_vars
+                  dist_road + livestock_growth + #slope + forest_cover_muni + credit_km2 + livestock_km2 + l+ #Accessibility/Exploitation vars
+                  (1|cod_ibge) + (1|state), # separate random intercepts for state and municipality
+                
+                  data=CAR21_scaled, family="poisson")
+
+summary(all.pois1)
+```
+### mod 2
+
+```{r, cache =T}
+all.pois2 <- glmer(num_overlaps_1ha_buffer_2021 ~  log_prop_area_2021 + pub_claims_slim_muni + priv_claims_muni_NEW + pop_km2 +  pop_growth +  #land_scarcity_vars  pop_rural_km2 
+                  titled + und_all + #blacklist + #land_conflict_vars
+                  dist_road + #slope + forest_cover_muni + credit_km2 + livestock_km2 + livestock_growth + #Accessibility/Exploitation vars
+                  (1|cod_ibge) + (1|state), # separate random intercepts for state and municipality
+                
+                  data = CAR21_scaled, family="poisson")
+
+summary(all.pois2)
+```
+### mod 3
+
+```{r, cache =T}
+all.pois3 <- glmer(num_overlaps_1ha_buffer_2021 ~  log_prop_area_2021 + pub_claims_slim_muni + priv_claims_muni_NEW + pop_km2 +  pop_growth +  #land_scarcity_vars  pop_rural_km2 
+                  titled + und_all + #blacklist + #land_conflict_vars
+                  dist_road + slope + forest_cover_muni + credit_km2 + livestock_km2 + livestock_growth + #Accessibility/Exploitation vars
+                  (1|cod_ibge) + (1|state), # separate random intercepts for state and municipality
+                
+                  data=CAR21_scaled, family="poisson")
+
+summary(all.pois3)
+```
+### mod 4
+
+```{r, cache =T}
+all.pois4 <- glmer(num_overlaps_1ha_buffer_2021 ~  log_prop_area_2021 + pub_claims_slim_muni + pop_km2 +  pop_growth +  #land_scarcity_vars  pop_rural_km2 
+                  titled + und_all + #blacklist + #land_conflict_vars
+                  dist_road + slope + forest_cover_muni + credit_km2 + livestock_km2 + livestock_growth + #Accessibility/Exploitation vars
+                  (1|cod_ibge) + (1|state), # separate random intercepts for state and municipality
+                
+                  data=CAR21_scaled, family="poisson")
+
+summary(all.pois4)
+```
+### mod 5
+
+```{r, cache =T}
+all.pois5 <- glmer(num_overlaps_1ha_buffer_2021 ~  log_prop_area_2021 + pub_claims_slim_muni + pop_km2 +  pop_growth +  #land_scarcity_vars  pop_rural_km2 
+                  AST_INCRA + titled + und_all + #blacklist + #land_conflict_vars
+                  dist_road + slope + forest_cover_muni + credit_km2 + livestock_km2 + livestock_growth + #Accessibility/Exploitation vars
+                  (1|cod_ibge) + (1|state), # separate random intercepts for state and municipality
+                
+                  data=CAR21_scaled, family="poisson")
+
+summary(all.pois5)
+```
+### mod 6
+
+```{r, cache =T}
+all.pois6 <- glmer(num_overlaps_1ha_buffer_2021 ~  log_prop_area_2021 + pub_claims_slim_muni + pop_km2 +  pop_growth + priv_claims_muni_NEW + #land_scarcity_vars  pop_rural_km2 
+                  AST_INCRA + titled + und_all + #blacklist + #land_conflict_vars
+                  dist_road + slope + forest_cover_muni + credit_km2 + livestock_km2 + livestock_growth + #Accessibility/Exploitation vars
+                  (1|cod_ibge) + (1|state), # separate random intercepts for state and municipality
+                
+                  data=CAR21_scaled, family="poisson")
+
+summary(all.pois6)
+```
+
+## test which model is best
+```{r}
+anova(all.pois1, all.pois2, all.pois3, all.pois4, all.pois5, all.pois6)
+```
+```{r}
+anova(all.pois3, all.pois6)
+```
+
+
+# PLOTTING
+
+```{r}
+library(sjPlot); library(ggplot2)
+```
+
+```{r}
+gg.1 <-  plot_model(all.pois6, type = "est", title = "", show.p = TRUE, ci.lvl = 0.95,  p.style = "asterisk",
+                    axis.lim = c(0.99,2.001),
+                    show.intercept = T, p.threshold = c(0.05, 0.01, 0.001),
+                    vline.color = "black",
+                    axis.labels = rev(c("(Intercept)", "property area", "percent public land", "population density",
+                                        "population growth", "percent private land", 
+                                     "AST INCRA [Y]", "CAR21 titled [Y]",
+                                    "undesignated [Y]", "distance to road", "land slope",
+                                    "percent forest cover",
+                                    "avg. agricultural credit", "avg. livestock herd size", "livestock growth"))) +
+                    theme_sjplot2() + ylim(c(0.45, 2.1))
+
+gg.1 
+```
+
+## property area
+```{r}
+gg_prop_area <- plot_model(all.pois6, type = "pred", title = "", terms = "log_prop_area_2021", 
+                                 col = "#377EB8") + theme_sjplot2() + 
+                      scale_x_continuous(breaks = seq(0, 5, by = 1), 
+                                        labels =  round(seq(from = -9,
+                                                              to =  log(range(CAR_21$prop_area_2021)[2]),
+                                                              length.out  = 6)), trans = 'log') + 
+                      ylab("no. of property overlaps") + 
+                      xlab("property area (ha)")
+  
+
+gg_prop_area
+
+```
+
+
+
+## pub claim muni
+```{r}
+gg_pub_claims_slim_muni <- plot_model(all.pois6, type = "pred", title = "", terms = "pub_claims_slim_muni", 
+                                 axis.lim = c(0,3), col = "#377EB8") + theme_sjplot2() + 
+                      scale_x_continuous(breaks = seq(-2, 3, by = 1), 
+                                         labels =  round(seq(from = range(CAR_21$pub_claims_slim_muni)[1]*100,
+                                                             to =  range(CAR_21$pub_claims_slim_muni)[2]*100,
+                                                             length.out  = 6))) + 
+                      ylab("no. of property overlaps") + 
+                      xlab("% protected land")
+  
+
+gg_pub_claims_slim_muni 
+```
+
+## priv claims muni
+
+```{r}
+gg_priv_claims_muni_NEW <- plot_model(all.pois6, type = "pred", title = "", terms = "priv_claims_muni_NEW", 
+                                  axis.lim = c(0,3), col = "#377EB8") + theme_sjplot2() + 
+                       scale_x_continuous(breaks = seq(-3, 3, by = 1), 
+                                          labels = round(seq(from = range(CAR21$priv_claims_muni_NEW)[1]*100,
+                                                             to =  range(CAR21$priv_claims_muni_NEW)[2]*100,
+                                                             length.out  = 7))) + 
+                       ylab("no. of property overlaps") + 
+                       xlab("% private land")
+
+gg_priv_claims_muni_NEW
+```
+
+## population density
+
+```{r}
+gg_pop_dens <- plot_model(all.pois6, type = "pred", title = "", terms = "pop_km2", 
+                          axis.lim = c(0,3)) + theme_sjplot2() + 
+               scale_x_continuous(breaks = seq(-10, 50, by = 10),
+                                  labels = round(seq(from = range(CAR21$pop_km2)[1],
+                                                     to =  range(CAR21$pop_km2)[2],
+                                                     length.out  = 7))) +
+               ylab("no. of property overlaps") + 
+               xlab(expression("population density (inhabitants km"^-2*")"))
+
+gg_pop_dens
+```
+
+## AST_INCRA
+```{r}
+gg.AST <- plot_model(all.pois6, type = "pred", title = "", terms = "AST_INCRA", 
+                        axis.lim = c(0.25,1), color = "black", axis.labels = a.labs) + 
+             theme_sjplot2() + ylab("no. of property overlaps")  + 
+             scale_x_continuous(name = NULL, labels=c("non-AST", "AST"), breaks = c(0,1))
+
+gg.AST 
+```
+
+
+## titled
+```{r}
+gg.titled <- plot_model(all.pois6, type = "pred", title = "", terms = "titled", 
+                        axis.lim = c(0.25,1), color = "black", axis.labels =a.labs) + 
+             theme_sjplot2() + ylab("no. of property overlaps")  + 
+             scale_x_continuous(name = NULL, labels=c("untitled", "titled"), breaks = c(0,1))
+
+gg.titled 
+```
+
+## undesignated
+```{r}
+gg.und <- plot_model(all.pois6, type = "pred", title = "", terms = "und_all", 
+                     axis.lim = c(0.25,1), color = "black") + theme_sjplot2() + 
+          ylab("no. of property overlaps") + 
+          scale_x_continuous(name = NULL, labels=c("designated", "undesignated"), breaks = c(0,1))
+
+gg.und 
+```
+
+## distance to road
+```{r}
+gg_dist_road <- plot_model(all.pois6, type = "pred", title = "", terms = "dist_road", 
+                          axis.lim = c(0,7), col = "#377EB8") + theme_sjplot2() + 
+               scale_x_continuous(breaks = seq(-5, 30, by = 5),
+                                  labels = round(seq(from = range(CAR21$dist_road)[1],
+                                                     to =  range(CAR21$dist_road)[2],
+                                                     length.out  = 8))) +
+               ylab("no. of property overlaps") + 
+               xlab("distance to road (m)")
+
+gg_dist_road
+```
+## slope 
+```{r}
+gg_slope <- plot_model(all.pois6, type = "pred", title = "", terms = "slope", 
+                          axis.lim = c(0.25,1), col = "#377EB8") + theme_sjplot2() + 
+               scale_x_continuous(breaks = seq(-35, 0, by = 5),
+                                  labels = round(seq(from =  range(CAR21[CAR21$slope >0,]$slope)[1],
+                                                     to =   range(CAR21[CAR21$slope >0,]$slope)[2],
+                                                     length.out  = 8))) +
+               ylab("no. of property overlaps") + 
+               xlab("terrain slope (%)")
+
+gg_slope 
+```
+
+## average ag credit
+```{r}
+gg_ag_credit <- plot_model(all.pois6, type = "pred", title = "", terms = "credit_km2", 
+                          axis.lim = c(0,1.5)) + theme_sjplot2() + 
+               scale_x_continuous(breaks = seq(-2.5, 10, length.out = 11),
+                                  labels = seq(0, 50, length.out  = 11)) +
+               ylab("no. of property overlaps") + 
+               xlab(expression(atop("average agricultural credit", paste("2013-2021 (R$1000 km"^-2*")"))))
+
+gg_ag_credit 
+```
+
+## average livestock herd size 
+```{r}
+gg_livestock <- plot_model(all.pois6, type = "pred", title = "", terms = "livestock_km2", 
+                          axis.lim = c(0.4,1.2)) + theme_sjplot2() + 
+               scale_x_continuous(breaks = seq(-2, 4, length.out = 6),
+                                  labels = round(seq(from = range(CAR21$livestock_km2)[1],
+                                                     to =   range(CAR21$livestock_km2)[2],
+                                                     length.out  = 6)))  +
+               ylab("no. of property overlaps") + 
+               xlab(expression(atop("average livestock herd size", paste("2008-2022 (no. km"^-2*")"))))
+
+gg_livestock
+```
+
+## livestock growth
+```{r}
+gg_livestock_grow <- plot_model(all.pois6, type = "pred", title = "", terms = "livestock_growth", 
+                          axis.lim = c(0,4), col = "#377EB8") + theme_sjplot2() + 
+               scale_x_continuous(breaks = seq(-5, 25, length.out = 7),
+                                  labels = round(seq(from = range(CAR21$livestock_growth)[1],
+                                                     to =   range(CAR21$livestock_growth)[2],
+                                                     length.out  = 7)))  +
+               ylab("no. property overlaps") + 
+               xlab(expression(atop("change of livestock herds", paste("2008-2020 (no. km"^-2*")"))))
+
+gg_livestock_grow
+```
+
+## multipanel gg plot
+
+```{r}
+row1 <- cowplot::plot_grid(gg.1 + theme(axis.title.x=element_text(size=10)), 
+                           gg.und + theme(axis.title.x=element_text(size=10), 
+                                          axis.title.y=element_text(size=10), 
+                                          plot.margin = unit(c(0, 0, 0.6, 0), "cm")), 
+                           gg.titled + theme(axis.title.x=element_text(size=10),
+                                             axis.title.y=element_text(size=10), 
+                                          plot.margin = unit(c(0, 0, 0.6, 0), "cm")),
+                           gg.AST + theme(axis.title.x=element_text(size=10),
+                                             axis.title.y=element_text(size=10), 
+                                          plot.margin = unit(c(0, 0, 0.6, 0), "cm")),
+                           labels = c('A','B','C','D'), label_size = 12, nrow  =1, ncol = 4, rel_widths = c(1.5,1,1,1), 
+                           alight = "v")
+  
+row2 <- cowplot::plot_grid(gg_prop_area + theme(axis.title.x=element_text(size=10),
+                                                      axis.title.y=element_text(size=10)),
+                           gg_pub_claims_slim_muni + theme(axis.title.x=element_text(size=10), 
+                                                      axis.title.y=element_text(size=10)), 
+                           gg_priv_claims_muni_NEW+ theme(axis.title.x=element_text(size=10),
+                                                      axis.title.y=element_text(size=10)), 
+                           labels = c('D','E','F'), label_size = 12, align = "h", nrow  =1, ncol = 3)
+
+row3 <- cowplot::plot_grid(gg_pop_dens + theme(axis.title.x=element_text(size=10), 
+                                               axis.title.y=element_text(size=10)), 
+                           gg_dist_road + theme(axis.title.x=element_text(size=10), 
+                                                axis.title.y=element_text(size=10)), 
+                           gg_slope + theme(axis.title.x=element_text(size=10), 
+                                            axis.title.y=element_text(size=10)), 
+                           labels = c('G','H','I'), label_size = 12, align = "h", nrow  =1, ncol = 3)
+
+row4 <- cowplot::plot_grid(gg_ag_credit + theme(axis.title.x=element_text(size=10), 
+                                                axis.title.y=element_text(size=10)), 
+                           gg_livestock + theme(axis.title.x=element_text(size=10), 
+                                                axis.title.y=element_text(size=10)), 
+                           gg_livestock_grow + theme(axis.title.x=element_text(size=10), 
+                                                     axis.title.y=element_text(size=10)), 
+                           labels = c('J','K','L'), label_size = 12, align = "h", nrow  =1, ncol = 3)
+
+
+tiff(file="CAR21_PoissonModel_masterFig_v2_FINAL.tiff", width = 19, height =25, units = "cm", res = 600, compression = "lzw")
+cowplot::plot_grid(row1, row2, row3, row4, ncol = 1, nrow =4, rel_heights = c(1.3,1,1.1,1.2))
+dev.off()
+
+```
+##  plotting random efects
+
+### state-level intercept
+
+```{r}
+gg_state_re <- plot_model(all.pois6, type = "re", terms = "state", title = " ", show.intercept = TRUE, 
+                          ci.lvl = 0.95,  axis.lim = c(0.5,2), 
+                          vline.color = "black")[[2]] + theme_sjplot2() + 
+                          scale_x_discrete(labels = rev(c("Tocantins", "Roraima", "Rondonia", 
+                                              "Para", "Mato Grosso", "Maranhao",
+                                              "Amapa", "Amazonas", "Acre")))
+
+gg_state_re
+
+tiff(file="CAR21_PoissonModel_State_RandomEffects.tiff", width = 9, height =9, units = "cm", res = 600, compression = "lzw")
+gg_state_re
+dev.off()
+```
+
+### municipality- level intercept
+```{r, fig.height =12}
+gg_muni_re <- plot_model(all.pois6, type = "re", terms = "state", title = "", show.p = TRUE, 
+                          ci.lvl = 0.95,  axis.lim = c(0.1,2),
+                          vline.color = "black")[[1]] + theme_sjplot2()
+
+gg_muni_re
+```
+
+
+
+```{r}
+# tiff(file="CAR21_PoissonModel_RandomEffects.tiff", width = 18, height =44, units = "cm", res = 600, compression = "lzw")
+# cowplot::plot_grid(gg_state_re, gg_muni_re, ncol = 1, nrow =2, rel_heights = c(0.5,6))
+# dev.off()
+
+```
+
+
+
+
+# MODEL TABLE
+
+```{r}
+tab_model(all.pois6, show.se = T, show.stat = T, order.terms = T, digits =4)
+```
+
+# Fitting the models for small vs. large landowners
+
+
+```{r}
+## chunk up the dataset 
+
+CAR21_scaled_small <- CAR21_scaled[CAR21_scaled$mf < 4,]
+
+CAR21_scaled_medium <- CAR21_scaled[CAR21_scaled$mf >= 4 & CAR21_scaled$mf <= 15,]
+
+CAR21_scaled_large <- CAR21_scaled[CAR21_scaled$mf > 15,]
+```
+
+
+## small
+```{r}
+small.pois6 <- glmer(num_overlaps_1ha_buffer_2021 ~  log_prop_area_2021 + pub_claims_slim_muni + 
+                       pop_km2 +  pop_growth + priv_claims_muni_NEW + #land_scarcity_vars  pop_rural_km2 
+                  AST_INCRA + titled + und_all + #blacklist + #land_conflict_vars
+                  dist_road + slope + forest_cover_muni + credit_km2 + livestock_km2 + livestock_growth + #Accessibility/Exploitation vars
+                  (1|cod_ibge) + (1|state), # separate random intercepts for state and municipality
+                
+                  data=CAR21_scaled_small, family="poisson")
+
+summary(small.pois6)
+```
+
+
+## medium
+```{r}
+medium.pois6 <- glmer(num_overlaps_1ha_buffer_2021 ~  log_prop_area_2021 + pub_claims_slim_muni + 
+                        pop_km2 +  pop_growth + priv_claims_muni_NEW + #land_scarcity_vars  pop_rural_km2 
+                  AST_INCRA + titled + und_all + #blacklist + #land_conflict_vars
+                  dist_road + slope + forest_cover_muni + credit_km2 + livestock_km2 + livestock_growth + #Accessibility/Exploitation vars
+                  
+                  (1|cod_ibge) + (1|state), # separate random intercepts for state and municipality
+                
+                  data=CAR21_scaled_medium, family="poisson")
+
+summary(medium.pois6)
+```
+
+
+## large
+```{r}
+large.pois6 <- glmer(num_overlaps_1ha_buffer_2021 ~  log_prop_area_2021 + pub_claims_slim_muni + 
+                       pop_km2 + pop_growth + priv_claims_muni_NEW + #land_scarcity_vars  pop_rural_km2 
+                       AST_INCRA + titled + und_all + #blacklist + #land_conflict_vars
+                  dist_road + slope + forest_cover_muni + credit_km2 + livestock_km2 + livestock_growth + #Accessibility/Exploitation vars
+                  (1|cod_ibge) + (1|state), # separate random intercepts for state and municipality
+                
+                  data=CAR21_scaled_large, family="poisson")
+
+summary(large.pois6)
+```
+# PLOTTING 
+
+## model estimates
+```{r}
+model_est <- rbind(get_model_data((small.pois6), type  = "est", show.intercept = T), 
+                   get_model_data((medium.pois6), type  = "est", show.intercept = T), 
+                   get_model_data(large.pois6, type = "est", show.intercept = T)) 
+model_est$model <- c(rep("small", 15), rep("medium", 15), rep("large", 15))
+```
+
+```{r}
+gg.estimates  <-  ggplot(aes(x= estimate, y = as.factor(xpos), 
+                             col = group, shape = model), data = model_est)  + 
+                  annotate('rect', ymin = seq(0.5,14.5, by =2), ymax = seq(1.5,15.5, by = 2), 
+                       xmin=-Inf, xmax=Inf, alpha=0.2, fill="darkgray") +  
+                  geom_vline(xintercept = 1, linewidth = 0.75, col = "#000000bf") + 
+                  geom_point(aes(group = model), 
+                             position = ggstance::position_dodgev(height=1)) +
+                  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high, group = model), 
+                                 position = ggstance::position_dodgev(height=1), height = 1) +
+                  # scale_y_discrete(breaks = 1:14,
+                  #                    labels = levels(model_est$term))  +
+                  ylab(NULL) + xlab("Incidence Rate Ratio") + xlim(0, 2.5)+
+                  scale_color_manual(values = c("#00aedbbf", "#d11141bf"), guide = "none") +
+                  scale_shape_manual(values = c(19,15,17), name = "landholder size") +
+                  theme_minimal()  + theme(panel.border = element_rect(colour = "#000000bf", 
+                                                                       fill=NA, size=1),
+                                           legend.position = "top") + 
+                  scale_y_discrete(1:15, labels = rev(c("(Intercept)", "property area", "percent public land", 
+                                                        "population density",
+                                                        "population growth", "percent private land", 
+                                     "AST INCRA [Y]", "CAR21 titled [Y]",
+                                    "undesignated [Y]", "distance to road", "land slope",
+                                    "percent forest cover",
+                                    "avg. agricultural credit", "avg. livestock herd size", "livestock growth")),
+                   name = NULL) + xlim(c(0,3.5)) 
+  
+    
+tiff("CAR21_IRR_effectPlot_3models.tiff", width = 16, height =16, units = "cm", res = 600, compression = "lzw")  
+gg.estimates
+dev.off()
+```
+
+## property area
+
+```{r}
+library(tidyverse)
+
+fit.1 <- ggeffects::ggpredict(small.pois6, terms = "log_prop_area_2021")
+fit.2 <- ggeffects::ggpredict(medium.pois6, terms = "log_prop_area_2021")
+fit.3 <- ggeffects::ggpredict(large.pois6, terms = "log_prop_area_2021")
+
+fits.log_prop_area <- do.call(bind_rows, list(fit.1, fit.2, fit.3)) |> as_tibble()
+
+fits.log_prop_area$group <-  as.factor(c(rep("small", length(fit.1$x)), 
+                                         rep("medium", length(fit.2$x)), 
+                                         rep("large", length(fit.3$x))))
+
+fits.log_prop_area$x_axis_breaks <- c(seq(range(log(CAR21[CAR21$mf<4,]$prop_area_2021))[1],
+                                   range(log(CAR21[CAR21$mf<4,]$prop_area_2021))[2],length.out = 6),
+                               seq(range(log(CAR21[CAR21$mf>4 & CAR21$mf<15,]$prop_area_2021))[1],
+                                   range(log(CAR21[CAR21$mf>4 & CAR21$mf<15,]$prop_area_2021))[2],length.out = 7),
+                               seq(range(log(CAR21[CAR21$mf>15,]$prop_area_2021))[1],
+                                   range(log(CAR21[CAR21$mf>15,]$prop_area_2021))[2],length.out = 8))
+
+fits.log_prop_area$x_axis_labels <- exp(fits.log_prop_area$x_axis_breaks)
+
+
+gg.log_prop_area <- ggplot(aes(x = x_axis_labels, y = predicted),
+                           data = fits.log_prop_area) + 
+                    geom_line(aes(col = group), lwd = 1) + 
+                    geom_ribbon(aes(ymin = conf.low, ymax = conf.high, fill = group), alpha = 0.1) +
+                    scale_x_continuous(trans = "log", labels = scales::label_number(accuracy = 1), n.breaks = 6) +
+                    theme_sjplot() +
+                    ylab("# property overlaps") + 
+                    xlab("property area (ha)") + 
+                    scale_color_manual(values = c( "#011627BF", "#ff3366BF", "#00f0b5BF")) +
+                    scale_fill_manual(values = c( "#011627BF", "#ff3366BF", "#00f0b5BF")) +
+                    scale_y_log10(labels = scales::label_number_si())  #+
+                    #theme(axis.text.x=element_text(angle=30,hjust=1))
+                    
+  
+gg.log_prop_area
+```
+
+
+
+## pub claims muni
+
+```{r}
+fit.1 <- ggeffects::ggpredict(small.pois6, terms = "pub_claims_slim_muni")
+fit.2 <- ggeffects::ggpredict(medium.pois6, terms = "pub_claims_slim_muni")
+fit.3 <- ggeffects::ggpredict(large.pois6, terms = "pub_claims_slim_muni")
+
+fits.pub_claims_slim_muni <- do.call(bind_rows, list(fit.1, fit.2, fit.3)) |> as_tibble()
+
+fits.pub_claims_slim_muni$group <-  as.factor(c(rep("small", length(fit.1$x)), 
+                                         rep("medium", length(fit.2$x)), 
+                                         rep("large", length(fit.3$x))))
+
+
+gg.pub_claims_slim_muni <- ggplot(aes(x = x, y = predicted),
+                           data = fits.pub_claims_slim_muni) + 
+                    geom_line(aes(col = group), lwd = 1) + 
+                    geom_ribbon(aes(ymin = conf.low, ymax = conf.high, fill = group), alpha = 0.1) +
+                    scale_x_continuous(breaks = seq(-1, 4, by = 1),
+                                        labels =  round(seq(from = range(CAR21$pub_claims_slim_muni)[1]*100,
+                                                             to =  range(CAR21$pub_claims_slim_muni)[2]*100,
+                                                            length.out  = 6))) +
+                    theme_sjplot() +
+                    ylab("# property overlaps") + 
+                    xlab("% protected land") + 
+                    scale_color_manual(values = c("#011627BF", "#ff3366BF", "#00f0b5BF")) +
+                    scale_fill_manual(values = c("#011627BF", "#ff3366BF", "#00f0b5BF"))
+  
+gg.pub_claims_slim_muni
+```
+
+
+
+## population density 
+```{r}
+fit.1 <- ggeffects::ggpredict(small.pois6, terms = "pop_km2")
+fit.2 <- ggeffects::ggpredict(medium.pois6, terms = "pop_km2")
+fit.3 <- ggeffects::ggpredict(large.pois6, terms = "pop_km2")
+
+fits.pop_km2 <- do.call(bind_rows, list(fit.1, fit.2, fit.3)) |> as_tibble()
+
+fits.pop_km2$group <-  as.factor(c(rep("small", length(fit.1$x)), 
+                                         rep("medium", length(fit.2$x)), 
+                                         rep("large", length(fit.3$x))))
+
+
+gg.pop_km2 <- ggplot(aes(x = x, y = predicted),
+                           data = fits.pop_km2) + 
+                    geom_line(aes(col = group), lwd = 1) + 
+                    geom_ribbon(aes(ymin = conf.low, ymax = conf.high, fill = group), alpha = 0.1) +
+                    scale_x_continuous(breaks = seq(-10, 50, by = 20),
+                                        labels =  round(seq(from = range(CAR21$pop_km2)[1],
+                                                             to =  range(CAR21$pop_km2)[2],
+                                                            length.out  = 4))) +
+                    theme_sjplot() +
+                    ylab("# property overlaps") + 
+                    xlab(expression("population density (inhabitants km"^-2*")")) + 
+                    scale_color_manual(values = c("#011627BF", "#ff3366BF", "#00f0b5BF")) +
+                    scale_fill_manual(values = c("#011627BF", "#ff3366BF", "#00f0b5BF"))# +
+                    #theme(axis.text.x=element_text(angle=30,hjust=1))
+  
+gg.pop_km2
+```
+
+
+
+## population growth
+```{r}
+fit.1 <- ggeffects::ggpredict(small.pois6, terms = "pop_growth")
+fit.2 <- ggeffects::ggpredict(medium.pois6, terms = "pop_growth")
+fit.3 <- ggeffects::ggpredict(large.pois6, terms = "pop_growth")
+
+fits.pop_growth <- do.call(bind_rows, list(fit.1, fit.2, fit.3)) |> as_tibble()
+
+fits.pop_growth$group <-  as.factor(c(rep("small", length(fit.1$x)), 
+                                         rep("medium", length(fit.2$x)), 
+                                         rep("large", length(fit.3$x))))
+
+
+gg.pop_growth <- ggplot(aes(x = x, y = predicted),
+                           data = fits.pop_growth) + 
+                    geom_line(aes(col = group), lwd = 1) + 
+                    geom_ribbon(aes(ymin = conf.low, ymax = conf.high, fill = group), alpha = 0.1) +
+                    scale_x_continuous(breaks = seq(-6, 6, by = 2),
+                                        labels =  round(seq(from = range(CAR21$pop_growth)[1],
+                                                             to =  range(CAR21$pop_growth)[2],
+                                                            length.out  = 7),3)) +
+                    theme_sjplot() +
+                    ylab("# property overlaps") + 
+                    xlab(expression("population growth (inhabitants km"^-2*")")) + 
+                    scale_color_manual(values = c("#011627BF", "#ff3366BF", "#00f0b5BF")) +
+                    scale_fill_manual(values = c("#011627BF", "#ff3366BF", "#00f0b5BF"))
+  
+gg.pop_growth
+```
+
+
+
+## priv claims muni
+```{r}
+fit.1 <- ggeffects::ggpredict(small.pois6, terms = "priv_claims_muni_NEW")
+fit.2 <- ggeffects::ggpredict(medium.pois6, terms = "priv_claims_muni_NEW")
+fit.3 <- ggeffects::ggpredict(large.pois6, terms = "priv_claims_muni_NEW")
+
+fits.priv_claims_muni_NEW <- do.call(bind_rows, list(fit.1, fit.2, fit.3)) |> as_tibble()
+
+fits.priv_claims_muni_NEW$group <-  as.factor(c(rep("small", length(fit.1$x)), 
+                                         rep("medium", length(fit.2$x)), 
+                                         rep("large", length(fit.3$x))))
+
+
+gg.priv_claims_muni_NEW <- ggplot(aes(x = x, y = predicted),
+                           data = fits.priv_claims_muni_NEW) + 
+                    geom_line(aes(col = group), lwd = 1) + 
+                    geom_ribbon(aes(ymin = conf.low, ymax = conf.high, fill = group), alpha = 0.1) +
+                    scale_x_continuous(breaks = seq(-3, 1.5, by = 0.5),
+                                        labels =  round(seq(from = range(CAR21$priv_claims_muni_NEW)[1]*100,
+                                                             to =  range(CAR21$priv_claims_muni_NEW)[2]*100,
+                                                            length.out  = 10))) +
+                    theme_sjplot() +
+                    ylab("# property overlaps") + 
+                    xlab("% private land") + 
+                    scale_color_manual(values = c("#011627BF", "#ff3366BF", "#00f0b5BF")) +
+                    scale_fill_manual(values = c("#011627BF", "#ff3366BF", "#00f0b5BF"))
+  
+gg.priv_claims_muni_NEW
+```
+
+
+## AST INCRA
+```{r}
+fit.1 <- ggeffects::ggpredict(small.pois6, terms = "AST_INCRA")
+fit.2 <- ggeffects::ggpredict(medium.pois6, terms = "AST_INCRA")
+fit.3 <- ggeffects::ggpredict(large.pois6, terms = "AST_INCRA")
+
+fits.AST_INCRA <- do.call(bind_rows, list(fit.1, fit.2, fit.3)) |> as_tibble()
+
+fits.AST_INCRA$group <-  as.factor(c(rep("small", length(fit.1$x)), 
+                                         rep("medium", length(fit.2$x)), 
+                                         rep("large", length(fit.3$x))))
+
+
+gg.AST_INCRA <- ggplot(aes(x = x, y = predicted),
+                           data = fits.AST_INCRA) + 
+                    geom_point(aes(col = group), alpha = 0.9, position = position_dodge(0.9)) + 
+                    geom_errorbar(aes(ymin = conf.low, ymax = conf.high, col = group), alpha = 0.9, position = position_dodge(0.9)) +
+                    scale_x_discrete(name = NULL, labels=c("non-AST", "AST")) +
+                    theme_sjplot() +
+                    ylab("# property overlaps") + 
+                    scale_color_manual(values = c("#011627BF", "#ff3366BF", "#00f0b5BF")) +
+                    scale_fill_manual(values = c("#011627BF", "#ff3366BF", "#00f0b5BF"))
+  
+gg.AST_INCRA
+```
+
+
+
+## titled
+```{r}
+fit.1 <- ggeffects::ggpredict(small.pois6, terms = "titled")
+fit.2 <- ggeffects::ggpredict(medium.pois6, terms = "titled")
+fit.3 <- ggeffects::ggpredict(large.pois6, terms = "titled")
+
+fits.titled <- do.call(bind_rows, list(fit.1, fit.2, fit.3)) |> as_tibble()
+
+fits.titled$group <-  as.factor(c(rep("small", length(fit.1$x)), 
+                                         rep("medium", length(fit.2$x)), 
+                                         rep("large", length(fit.3$x))))
+
+
+gg.titled <- ggplot(aes(x = x, y = predicted),
+                           data = fits.titled) + 
+                    geom_point(aes(col = group), alpha = 0.9, position = position_dodge(0.9)) + 
+                    geom_errorbar(aes(ymin = conf.low, ymax = conf.high, col = group), alpha = 0.9, position = position_dodge(0.9)) +
+                    scale_x_discrete(name = NULL, labels=c("untitled", "titled"), breaks = c(0,1)) +
+                    theme_sjplot() +
+                    ylab("# property overlaps") + 
+                    xlab("% public land") + 
+                    scale_color_manual(values = c("#011627BF", "#ff3366BF", "#00f0b5BF")) +
+                    scale_fill_manual(values = c("#011627BF", "#ff3366BF", "#00f0b5BF"))
+  
+gg.titled
+```
+
+
+
+## undesignated
+```{r}
+fit.1 <- ggeffects::ggpredict(small.pois6, terms = "und_all")
+fit.2 <- ggeffects::ggpredict(medium.pois6, terms = "und_all")
+fit.3 <- ggeffects::ggpredict(large.pois6, terms = "und_all")
+
+fits.und_all <- do.call(bind_rows, list(fit.1, fit.2, fit.3)) |> as_tibble()
+
+fits.und_all$group <-  as.factor(c(rep("small", length(fit.1$x)), 
+                                         rep("medium", length(fit.2$x)), 
+                                         rep("large", length(fit.3$x))))
+
+
+gg.und_all <- ggplot(aes(x = x, y = predicted),
+                           data = fits.und_all) + 
+                    geom_point(aes(col = group), alpha = 0.9, position = position_dodge(0.9)) + 
+                    geom_errorbar(aes(ymin = conf.low, ymax = conf.high, col = group), alpha = 0.9, position = position_dodge(0.9)) +
+                    scale_x_discrete(name = NULL, labels=c("designated", "undesignated"), breaks = c(0,1)) +
+                    theme_sjplot() +
+                    ylab("# property overlaps") + 
+                    xlab("% public land") + 
+                    scale_color_manual(values = c("#011627BF", "#ff3366BF", "#00f0b5BF")) +
+                    scale_fill_manual(values = c("#011627BF", "#ff3366BF", "#00f0b5BF"))
+  
+gg.und_all
+```
+
+## distance to roads
+```{r}
+fit.1 <- ggeffects::ggpredict(small.pois6, terms = "dist_road")
+fit.2 <- ggeffects::ggpredict(medium.pois6, terms = "dist_road")
+fit.3 <- ggeffects::ggpredict(large.pois6, terms = "dist_road")
+
+fits.dist_road <- do.call(bind_rows, list(fit.1, fit.2, fit.3)) |> as_tibble()
+
+fits.dist_road$group <-  as.factor(c(rep("small", length(fit.1$x)), 
+                                         rep("medium", length(fit.2$x)), 
+                                         rep("large", length(fit.3$x))))
+
+
+gg.dist_road <- ggplot(aes(x = x, y = predicted),
+                           data = fits.dist_road) + 
+                    geom_line(aes(col = group), lwd = 1) + 
+                    geom_ribbon(aes(ymin = conf.low, ymax = conf.high, fill = group), alpha = 0.1) +
+                    scale_x_continuous(breaks = seq(-5, 30, by = 5),
+                                       labels = round(seq(from = range(CAR21$dist_road)[1],
+                                                          to =  range(CAR21$dist_road)[2],
+                                                          length.out  = 8))) +
+                    theme_sjplot() +
+                    ylab("# property overlaps") + 
+                    xlab("distance to road (m)") + 
+                    scale_color_manual(values = c("#011627BF", "#ff3366BF", "#00f0b5BF")) +
+                    scale_fill_manual(values = c("#011627BF", "#ff3366BF", "#00f0b5BF"))
+  
+gg.dist_road
+```
+
+
+## slope
+```{r}
+fit.1 <- ggeffects::ggpredict(small.pois6, terms = "slope")
+fit.2 <- ggeffects::ggpredict(medium.pois6, terms = "slope")
+fit.3 <- ggeffects::ggpredict(large.pois6, terms = "slope")
+
+fits.slope <- do.call(bind_rows, list(fit.1, fit.2, fit.3)) |> as_tibble()
+
+fits.slope$group <-  as.factor(c(rep("small", length(fit.1$x)), 
+                                         rep("medium", length(fit.2$x)), 
+                                         rep("large", length(fit.3$x))))
+
+
+gg.slope <- ggplot(aes(x = x, y = predicted),
+                           data = fits.slope) + 
+                    geom_line(aes(col = group), lwd = 1) + 
+                    geom_ribbon(aes(ymin = conf.low, ymax = conf.high, fill = group), alpha = 0.1) +
+                    scale_x_continuous(breaks = seq(-35, 0, by = 5),
+                                        labels =  round(seq(from =  range(CAR21[CAR21$slope >0,]$slope)[1],
+                                                            to =   range(CAR21[CAR21$slope >0,]$slope)[2],
+                                                            length.out  = 8))) +
+                    theme_sjplot() +
+                    ylab("# property overlaps") + 
+                    xlab("terrain slope (%)") + 
+                    scale_color_manual(values = c("#011627BF", "#ff3366BF", "#00f0b5BF"), name = "landholder size") +
+                    scale_fill_manual(values = c("#011627BF", "#ff3366BF", "#00f0b5BF"), name = "landholder size") + theme(legend.position = "top")
+  
+gg.slope
+```
+
+
+## forest cover
+```{r}
+fit.1 <- ggeffects::ggpredict(small.pois6, terms = "forest_cover_muni")
+fit.2 <- ggeffects::ggpredict(medium.pois6, terms = "forest_cover_muni")
+fit.3 <- ggeffects::ggpredict(large.pois6, terms = "forest_cover_muni")
+
+fits.forest_cover_muni <- do.call(bind_rows, list(fit.1, fit.2, fit.3)) |> as_tibble()
+
+fits.forest_cover_muni$group <-  as.factor(c(rep("small", length(fit.1$x)), 
+                                         rep("medium", length(fit.2$x)), 
+                                         rep("large", length(fit.3$x))))
+
+
+gg.forest_cover_muni <- ggplot(aes(x = x, y = predicted),
+                           data = fits.forest_cover_muni) + 
+                    geom_line(aes(col = group), lwd = 1) + 
+                    geom_ribbon(aes(ymin = conf.low, ymax = conf.high, fill = group), alpha = 0.1) +
+                    scale_x_continuous(breaks = seq(-2.5, 10, length.out = 11),
+                                       labels = seq(0, 50, length.out  = 11)) +
+                    theme_sjplot() +
+                    ylab("# property overlaps") + 
+                    xlab("% of municipality forested in 2016") + 
+                    scale_color_manual(values = c("#011627BF", "#ff3366BF", "#00f0b5BF")) +
+                    scale_fill_manual(values = c("#011627BF", "#ff336BF6", "#00f0b5BF"))
+  
+gg.forest_cover_muni
+```
+
+## credit density
+```{r}
+fit.1 <- ggeffects::ggpredict(small.pois6, terms = "credit_km2")
+fit.2 <- ggeffects::ggpredict(medium.pois6, terms = "credit_km2")
+fit.3 <- ggeffects::ggpredict(large.pois6, terms = "credit_km2")
+
+fits.credit_km2 <- do.call(bind_rows, list(fit.1, fit.2, fit.3)) |> as_tibble()
+
+fits.credit_km2$group <-  as.factor(c(rep("small", length(fit.1$x)), 
+                                         rep("medium", length(fit.2$x)), 
+                                         rep("large", length(fit.3$x))))
+
+
+gg.credit_km2 <- ggplot(aes(x = x, y = predicted),
+                           data = fits.credit_km2) + 
+                    geom_line(aes(col = group), lwd = 1) + 
+                    geom_ribbon(aes(ymin = conf.low, ymax = conf.high, fill = group), alpha = 0.1) +
+                    scale_x_continuous(breaks = seq(-2, 10, length.out = 7),
+                       labels = round(seq(from = range(CAR21$livestock_km2)[1],
+                                          to =   range(CAR21$livestock_km2)[2],
+                                          length.out  = 7)))  +
+                    theme_sjplot() +
+                    ylab("# property overlaps") + 
+                    xlab(expression(atop("average agricultural credit", paste("2013-2021 (R$1000 km"^-2*")")))) + 
+                    scale_color_manual(values = c("#011627BF", "#ff3366BF", "#00f0b5BF")) +
+                    scale_fill_manual(values = c("#011627BF", "#ff3366BF", "#00f0b5BF"))
+  
+gg.credit_km2
+```
+
+## livestock density
+```{r}
+fit.1 <- ggeffects::ggpredict(small.pois6, terms = "livestock_km2")
+fit.2 <- ggeffects::ggpredict(medium.pois6, terms = "livestock_km2")
+fit.3 <- ggeffects::ggpredict(large.pois6, terms = "livestock_km2")
+
+fits.livestock_km2 <- do.call(bind_rows, list(fit.1, fit.2, fit.3)) |> as_tibble()
+
+fits.livestock_km2$group <-  as.factor(c(rep("small", length(fit.1$x)), 
+                                         rep("medium", length(fit.2$x)), 
+                                         rep("large", length(fit.3$x))))
+
+
+gg.livestock_km2 <- ggplot(aes(x = x, y = predicted),
+                           data = fits.livestock_km2) + 
+                    geom_line(aes(col = group), lwd = 1) + 
+                    geom_ribbon(aes(ymin = conf.low, ymax = conf.high, fill = group), alpha = 0.1) +
+                    scale_x_continuous(breaks = seq(-2, 4, length.out = 6),
+                                       labels = round(seq(from = range(CAR21$livestock_km2)[1],
+                                                          to =   range(CAR21$livestock_km2)[2],
+                                                          length.out  = 6)))  +
+                    theme_sjplot() +
+                    ylab("# property overlaps") + 
+                     xlab(expression(atop("average livestock herd size", paste("2008-2022 (no. km"^-2*")")))) + 
+                    scale_color_manual(values = c("#011627BF", "#ff3366BF", "#00f0b5BF")) +
+                    scale_fill_manual(values = c("#011627BF", "#ff3366BF", "#00f0b5BF"))
+  
+gg.livestock_km2
+```
+
+## livestock growth
+```{r}
+fit.1 <- ggeffects::ggpredict(small.pois6, terms = "livestock_growth")
+fit.2 <- ggeffects::ggpredict(medium.pois6, terms = "livestock_growth")
+fit.3 <- ggeffects::ggpredict(large.pois6, terms = "livestock_growth")
+
+fits.livestock_growth <- do.call(bind_rows, list(fit.1, fit.2, fit.3)) |> as_tibble()
+
+fits.livestock_growth$group <-  as.factor(c(rep("small", length(fit.1$x)), 
+                                         rep("medium", length(fit.2$x)), 
+                                         rep("large", length(fit.3$x))))
+
+
+gg.livestock_growth <- ggplot(aes(x = x, y = predicted),
+                           data = fits.livestock_growth) + 
+                    geom_line(aes(col = group), lwd = 1) + 
+                    geom_ribbon(aes(ymin = conf.low, ymax = conf.high, fill = group), alpha = 0.1) +
+                    scale_x_continuous(breaks = seq(-5, 25, length.out = 7),
+                                       labels = round(seq(from = range(CAR21$livestock_growth)[1],
+                                                          to =   range(CAR21$livestock_growth)[2],
+                                                          length.out  = 7)))  +
+                    theme_sjplot() +
+                    ylab("# property overlaps") + 
+                    xlab(expression(atop("change of livestock herds", paste("2008-2020 (no. km"^-2*")")))) + 
+                    scale_color_manual(values = c("#011627BF", "#ff3366BF", "#00f0b5BF")) +
+                    scale_fill_manual(values = c("#011627BF", "#ff3366BF", "#00f0b5BF"))
+  
+gg.livestock_growth
+```
+
+## multipanel gg plot
+
+```{r}
+row1 <- cowplot::plot_grid(#gg.estimates + theme(axis.title.x=element_text(size=10)), 
+                           gg.und_all + theme(axis.title.x=element_text(size=10), 
+                                          axis.title.y=element_text(size=10, 
+                                                                    margin = margin(t = 0, r = 20, b = 0, l = 0)), legend.position = "none"), 
+                           gg.titled + theme(axis.title.x=element_text(size=10),
+                                             axis.title.y=element_text(size=10, 
+                                                                       margin = margin(t = 0, r = 5, b = 0, l = 0)), legend.position = "none"), 
+                           gg.AST_INCRA + theme(axis.title.x=element_text(size=10),
+                                             axis.title.y=element_text(size=10, 
+                                                                       margin = margin(t = 0, r = 5, b = 0, l = 0)), legend.position = "none"),
+                           labels = c('A','B','C'), label_size = 12, nrow  =1, ncol = 3, rel_widths = c(1.1,1,1))
+  
+row2 <- cowplot::plot_grid(gg.log_prop_area + theme(axis.title.x=element_text(size=10),
+                                                      axis.title.y=element_text(size=10), legend.position = c(0,4)),
+                           gg.pop_km2 + theme(axis.title.x=element_text(size=10), 
+                                               axis.title.y=element_text(size=10), legend.position = "none"),
+                           gg.pub_claims_slim_muni + theme(axis.title.x=element_text(size=10), 
+                                                      axis.title.y=element_text(size=10, 
+                                                                       margin = margin(t = 0, r = 5, b = 0, l = 0)), legend.position = "none"),
+                           labels = c('D','E','F'), label_size = 12, align = "h", nrow  =1, ncol = 3, rel_widths = c(1.1,1,1))
+
+row3 <- cowplot::plot_grid(gg.priv_claims_muni_NEW + theme(axis.title.x=element_text(size=10),
+                                                      axis.title.y=element_text(size=10,
+                                                                                margin = margin(t = 0, r = 20, b = 0, l = 0)), legend.position = "none"),
+                           gg.dist_road + theme(axis.title.x=element_text(size=10), 
+                                                axis.title.y=element_text(size=10), legend.position = "none"), 
+                           gg.credit_km2 + theme(axis.title.x=element_text(size=10), 
+                                                axis.title.y=element_text(size=10, 
+                                                                          margin = margin(t = 0, r = 5, b = 0, l = 0)), legend.position = "none"), 
+                           labels = c('G','H','I'), label_size = 12, align = "h", nrow  =1, ncol = 3, rel_widths = c(1.1,1,1))
+
+row4 <- cowplot::plot_grid(gg.slope + theme(axis.title.x=element_text(size=10), 
+                                            axis.title.y=element_text(size=10, 
+                                                                       margin = margin(t = 0, r = 5, b = 0, l = 0)), legend.position = "none"), 
+                           gg.livestock_km2 + theme(axis.title.x=element_text(size=10), 
+                                                axis.title.y=element_text(size=10, 
+                                                                       margin = margin(t = 0, r = 5, b = 0, l = 0)), legend.position = "none"), 
+                           gg.livestock_growth + theme(axis.title.x=element_text(size=10), 
+                                                     axis.title.y=element_text(size=10), legend.position = "none"), 
+                           labels = c('A','B','C'), label_size = 12, align = "h", nrow  =1, ncol = 3, rel_widths = c(1.1,1,1))
+
+
+legend <- cowplot::get_legend(gg.slope)
+
+tiff(file="CAR21_PoissonModel_masterFig_SML_v2.tiff", width = 22, height =18, units = "cm", res = 600, compression = "lzw")
+cowplot::plot_grid(legend, row1, row2, row3, ncol = 1, nrow =4, rel_heights = c(0.05,1,1.1,1.25), align= "hv")
+dev.off()
+
+
+# tiff(file="CAR21_PoissonModel_masterFig_SML_SUPPLEMENTAL.tiff", width = 22, height =8, units = "cm", res = 600, compression = "lzw")
+# cowplot::plot_grid(legend, row4, ncol = 1, nrow =2, rel_heights = c(0.05,1), align= "hv")
+# dev.off()
+
+```
+
+## state-level intercepts - SML modeles
+
+```{r}
+SML_re_est <- rbind(as.data.frame(get_model_data((small.pois6), type  = "re", show.intercept = T)[2]), 
+                   as.data.frame(get_model_data((medium.pois6), type  ="re", show.intercept = T)[2]),
+                   as.data.frame(get_model_data(large.pois6, type = "re", show.intercept = T)[2]))
+
+SML_re_est$model <- c(rep("small", 9), rep("medium", 9), rep("large", 9))
+
+```
+
+```{r}
+gg_state_re2  <-  ggplot(aes(x= estimate, y = as.factor(xpos),                              
+                             col = group, shape = model), data = SML_re_est)  + 
+                  annotate('rect', ymin = seq(0.5,8.5, by =2), ymax = seq(1.5,9.5, by = 2),
+                       xmin=-Inf, xmax=Inf, alpha=0.2, fill="darkgray") +
+                  geom_vline(xintercept = 1, linewidth = 0.75, col = "#000000bf") + 
+                  geom_point(aes(group = model), 
+                             position = ggstance::position_dodgev(height=1)) +
+                  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high, group = model), 
+                                 position = ggstance::position_dodgev(height=1), height = 1) +
+                                    ylab(NULL) + xlab("BULPs (Best Unbiased Linear Predictors)") + 
+                  scale_color_manual(values = c("#00aedbbf", "#d11141bf"), guide = "none") +
+                  scale_shape_manual(values = c(19,15,17), name = "landholder size") +
+                  theme_minimal()  + theme(panel.border = element_rect(colour = "#000000bf", 
+                                                                       fill=NA, size=1),
+                                           legend.position = "top") + 
+                  scale_y_discrete(1:9, labels = c("Acre", "Amazonas", "Amapa",
+                                                        "Maranhao",
+                                                        "Mato Grosso", "Para",  "Rondonia",
+                                    "Roraima", "Tocatins"),
+                  name = NULL) +
+                  xlim(c(-0.75,3)) #+ guides(shape = guide_legend(ncol = 1))
+  
+    
+tiff("CAR21_SML_POISSON_State_RandomEffects.tiff", width = 11, height =15, units = "cm", res = 600, compression = "lzw")
+gg_state_re2 
+dev.off()
+```
+```{r}
+tiff("CAR21_SML_POISSON_FIXED+RandomEffects.tiff", width = 22, height =16, units = "cm", res = 600, compression = "lzw")  
+ggpubr::ggarrange(gg.estimates, gg_state_re2 , widths = c(2,1), labels="AUTO", ncol = 2, nrow = 1, common.legend = T
+                  )
+dev.off()
+```
+
+
+# Fitting the modesl by state 
+## Acre - AC
+```{r}
+AC.pois3 <- glmer(num_overlaps_1ha_buffer_2021 ~  log_prop_area_2021 + pub_claims_slim_muni + 
+                                                  priv_claims_muni_NEW + pop_km2 +  pop_growth +  #land_scarcity_vars  pop_rural_km2 
+                  AST_INCRA + titled + und_all + #blacklist + #land_conflict_vars
+                  dist_road + slope + forest_cover_muni + credit_km2 + livestock_km2 + livestock_growth + #Accessibility/Exploitation vars
+                  (1|cod_ibge), # random intercepts for municipality
+                
+                  data=CAR21_scaled[CAR21_scaled$state == "AC",], family="poisson")
+
+summary(AC.pois3)
+```
+
+## Amazonas - AM
+```{r}
+AM.pois3 <- glmer(num_overlaps_1ha_buffer_2021 ~  log_prop_area_2021 + pub_claims_slim_muni + 
+                                                  priv_claims_muni_NEW + pop_km2 +  pop_growth +  #land_scarcity_vars  pop_rural_km2 
+                  AST_INCRA + titled + und_all + #blacklist + #land_conflict_vars
+                  dist_road + slope + forest_cover_muni + credit_km2 + livestock_km2 + livestock_growth + #Accessibility/Exploitation vars
+                  (1|cod_ibge), # random intercepts for municipality                
+                  data=CAR21_scaled[CAR21_scaled$state == "AM",], family="poisson")
+
+summary(AM.pois3)
+```
+
+## Amapa - AP
+```{r}
+AP.pois3 <- glmer(num_overlaps_1ha_buffer_2021 ~  log_prop_area_2021 + pub_claims_slim_muni + 
+                                                  priv_claims_muni_NEW + pop_km2 +  pop_growth +  #land_scarcity_vars  pop_rural_km2 
+                  AST_INCRA + titled + und_all + #blacklist + #land_conflict_vars
+                  dist_road + slope + forest_cover_muni + credit_km2 + livestock_km2 + livestock_growth + #Accessibility/Exploitation vars
+                  (1|cod_ibge), # random intercepts for municipality
+                
+                  data=CAR21_scaled[CAR21_scaled$state == "AP",], family="poisson")
+
+summary(AP.pois3)
+```
+
+## Maranhao - MA
+```{r}
+MA.pois3 <- glmer(num_overlaps_1ha_buffer_2021 ~  log_prop_area_2021 + pub_claims_slim_muni + 
+                                                  priv_claims_muni_NEW + pop_km2 +  pop_growth +  #land_scarcity_vars  pop_rural_km2 
+                  AST_INCRA + titled + und_all + #blacklist + #land_conflict_vars
+                  dist_road + slope + forest_cover_muni + credit_km2 + livestock_km2 + livestock_growth + #Accessibility/Exploitation vars
+                  (1|cod_ibge), # random intercepts for municipality
+                
+                  data=CAR21_scaled[CAR21_scaled$state == "MA",], family="poisson")
+
+summary(MA.pois3)
+```
+
+## Mato Grosso - MT
+```{r}
+MT.pois3 <- glmer(num_overlaps_1ha_buffer_2021 ~  log_prop_area_2021 + pub_claims_slim_muni + 
+                                                  priv_claims_muni_NEW + pop_km2 +  pop_growth +  #land_scarcity_vars  pop_rural_km2 
+                  AST_INCRA + titled + und_all + #blacklist + #land_conflict_vars
+                  dist_road + slope + forest_cover_muni + credit_km2 + livestock_km2 + livestock_growth + #Accessibility/Exploitation vars
+                  (1|cod_ibge), # random intercepts for municipality
+                
+                  data=CAR21_scaled[CAR21_scaled$state == "MT",], family="poisson")
+
+summary(MT.pois3)
+```
+
+## Para - PA
+```{r}
+PA.pois3 <- glmer(num_overlaps_1ha_buffer_2021 ~  log_prop_area_2021 + pub_claims_slim_muni + 
+                                                  priv_claims_muni_NEW + pop_km2 +  pop_growth +  #land_scarcity_vars  pop_rural_km2 
+                  AST_INCRA + titled + und_all + #blacklist + #land_conflict_vars
+                  dist_road + slope + forest_cover_muni + credit_km2 + livestock_km2 + livestock_growth + #Accessibility/Exploitation vars
+                  (1|cod_ibge), # random intercepts for municipality
+                
+                  data=CAR21_scaled[CAR21_scaled$state == "PA",], family="poisson")
+
+summary(PA.pois3)
+```
+
+## Rondonia - RO
+```{r}
+RO.pois3 <- glmer(num_overlaps_1ha_buffer_2021 ~  log_prop_area_2021 + pub_claims_slim_muni + 
+                                                  priv_claims_muni_NEW + pop_km2 +  pop_growth +  #land_scarcity_vars  pop_rural_km2 
+                  AST_INCRA + titled + und_all + #blacklist + #land_conflict_vars
+                  dist_road + slope + forest_cover_muni + credit_km2 + livestock_km2 + livestock_growth + #Accessibility/Exploitation vars
+                  (1|cod_ibge), # random intercepts for municipality
+                
+                  data=CAR21_scaled[CAR21_scaled$state == "RO",], family="poisson")
+
+summary(RO.pois3)
+```
+
+## Roraima - RR
+```{r}
+RR.pois3 <- glmer(num_overlaps_1ha_buffer_2021 ~  log_prop_area_2021 + pub_claims_slim_muni + 
+                                                  priv_claims_muni_NEW + pop_km2 +  pop_growth +  #land_scarcity_vars  pop_rural_km2 
+                  AST_INCRA + titled + und_all + #blacklist + #land_conflict_vars
+                  dist_road + slope + forest_cover_muni + credit_km2 + livestock_km2 + livestock_growth + #Accessibility/Exploitation vars
+                  (1|cod_ibge), # random intercepts for municipality
+                
+                  data=CAR21_scaled[CAR21_scaled$state == "RR",], family="poisson")
+
+summary(RR.pois3)
+```
+
+## Tocatinas - TO
+```{r}
+TO.pois3 <- glmer(num_overlaps_1ha_buffer_2021 ~  log_prop_area_2021 + pub_claims_slim_muni + 
+                                                  priv_claims_muni_NEW + pop_km2 +  pop_growth +  #land_scarcity_vars  pop_rural_km2 
+                  AST_INCRA + titled + und_all + #blacklist + #land_conflict_vars
+                  dist_road + slope + forest_cover_muni + credit_km2 + livestock_km2 + livestock_growth + #Accessibility/Exploitation vars
+                  (1|cod_ibge), # random intercepts for municipality
+                
+                  data=CAR21_scaled[CAR21_scaled$state == "TO",], family="poisson")
+
+summary(TO.pois3)
+```

@@ -1,0 +1,149 @@
+---
+title: "CAR21_temporal ANOVAs"
+author: "JAH"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    toc_collapsed: yes
+    toc_depth: 3
+---
+
+```{r include=FALSE}
+knitr::opts_chunk$set(tidy.opts=list(width.cutoff=60), cache = T, tidy=TRUE, echo = TRUE, message = FALSE, warning = FALSE, cache.lazy = T)
+```
+
+
+
+```{r}
+## read in the file  
+
+library(readr)
+
+CAR_series <- read_csv("CAR_series.csv")
+CAR_series2 <- read_csv("CAR_series_v2.csv")
+
+CAR_series2$overlap_14 <- as.numeric(CAR_series2$overlap_14)
+CAR_series2$overlap_15 <- as.numeric(CAR_series2$overlap_15)
+
+```
+ 
+# means and standard errors by year
+ 
+```{r}
+library(tidyverse)
+
+### create intermediate data frame
+df <- CAR_series %>% group_by(cod_ibge) %>% pivot_longer(gross_14:net_21, names_to = c("dataset", ".value"), values_to = c("value"), names_sep = "_")
+
+### long dataframe - for running stats
+CAR_series_long <- reshape2::melt(df, id.vars = c("cod_ibge", "dataset"))
+
+colnames(CAR_series_long)[3] <- "year"
+
+#### SAME CODE AS ABOVE but for revised data file -- CAR SERIES v2 
+df <- CAR_series2 %>% group_by(state, cod_ibge) %>% pivot_longer(gross_14:overlap_21, names_to = c("dataset", ".value"), values_to = c("value"), names_sep = "_")
+
+### long dataframe - for running stats
+CAR_series2_long <- reshape2::melt(df, id.vars = c("state", "cod_ibge", "dataset"))
+
+colnames(CAR_series2_long)[4] <- "year"
+
+```
+
+
+```{r}
+data_summary <- CAR_series2_long %>% group_by(dataset, year) %>%
+  summarise(sum_overlap=sum(value, na.rm = T)) #%>%
+  #arrange(desc(mean))
+
+data_summary$year <- as.factor(rep(c(seq(2014,2021)), 3))
+
+print.data.frame(data_summary)
+
+```
+
+
+
+# plot
+
+```{r}
+library(ggplot2)
+
+gg_year <- ggplot(aes(x = year, y = sum_overlap, color = dataset, shape = dataset), 
+                  data = data_summary[data_summary$dataset %in% c("gross", "net"),]) +
+           geom_point(position = position_dodge2(width = 0.9)) + 
+           theme_classic() + ylab("property area (ha)") + scale_y_continuous(labels = scales::label_number_si()) + 
+           theme(legend.position = c(0.8,0.25))
+
+#tiff  
+gg_year
+```
+
+# plot
+
+```{r}
+gg_year2 <- ggplot(aes(x = year, y = sum_overlap), data = data_summary[data_summary$dataset == "overlap",]) +
+           geom_point() + 
+           theme_classic() + ylab("overlap (ha)") + scale_y_continuous(labels = scales::label_number_si())
+  
+gg_year2
+```
+```{r}
+tiff(file = "yearly_CAR_trends.tiff", width = 18, height = 6, units = "cm", res = 600, compression = "lzw")
+cowplot::plot_grid(gg_year, gg_year2, ncol = 2, nrow = 1, labels = c("A","B"))
+dev.off()
+```
+
+
+
+# Simple ANOVA
+## net CAR
+```{r}
+anova_1 <- aov(value ~ year, data = CAR_series_long[CAR_series_long$dataset == "net",]) 
+
+summary(anova_1)
+```
+
+## gross CAR
+```{r}
+anova_2 <- aov(value ~ year, data = CAR_series_long[CAR_series_long$dataset == "gross",]) 
+
+summary(anova_2)
+```
+
+## difference / overlap
+```{r}
+anova_3 <- aov(value~year, data = CAR_series2_long[CAR_series2_long$dataset == "overlap",])
+
+summary(anova_3)
+```
+
+# repeated-measures Simple ANOVA
+## net CAR
+
+```{r}
+library(rstatix)
+
+CAR_series_long[CAR_series_long$dataset == "net",] %>% anova_test(dv = value, wid = cod_ibge, within = year) %>%
+                                                       get_anova_table() %>%
+                                                       adjust_pvalue(method = "bonferroni")
+
+```
+
+## gross CAR
+```{r}
+CAR_series_long[CAR_series_long$dataset == "gross",] %>% anova_test(dv = value, wid = cod_ibge, within = year) %>%
+                                                       get_anova_table() %>%
+                                                       adjust_pvalue(method = "bonferroni")
+
+```
+
+
+## difference / overlap
+```{r}
+CAR_series2_long[CAR_series2_long$dataset == "overlap",] %>% anova_test(dv = value, wid = cod_ibge, within = year) %>%
+                                                       get_anova_table() %>%
+                                                       adjust_pvalue(method = "bonferroni")
+```
