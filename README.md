@@ -10,10 +10,10 @@ It contains 3 Rmd files
    
 3. CAR21_temporalANOVAS.Rmd - this file contains Analysis of Variance to test whether CAR21 property overlap is increasing over time.
 
-It also contains 4 Python/Python Notebook files
+It also contains 3 Python/Python Notebook files
 1. def_statistics_CS.py - this file calculates the deforestation statistics used in the Chi-square analysis.
 2. LR_statistics_CS.py - this file calculates the LR (legal forest reserve) statistics used in the Chi-square analysis.
-3. and 4. duplicate_filter.ipynb and identify_duplicates - these files are used to identify suspected duplicates in the CAR.
+3. duplicate_filter.ipynb - this file is used to identify suspected duplicates in the CAR.
 
 Finally, it contains 3 figures which appear in the main text or supporing information appendix of the manuscript. 
 
