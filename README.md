@@ -1,5 +1,5 @@
 # CAR21_AmazonPropertyOverlap
-This repository is for Paul Furumo et al 2024 (in review) Land conflicts from overlapping claims in Brazil’s rural environmental registry
+This repository is for Paul Furumo et al. 2024 _PNAS_ Land conflicts from overlapping claims in Brazil’s rural environmental registry
 
 It contains 3 Rmd files 
 1. CAR21_PoissonOverlap.Rmd - this is the main analysis file which fits the Poisson generalize linear mixed-effects models.
