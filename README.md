@@ -1,7 +1,7 @@
 # CAR21_AmazonPropertyOverlap
 This repository is for Paul Furumo et al. 2024 _PNAS_ "Land conflicts from overlapping claims in Brazil’s rural environmental registry"
 
-It 3 Python/Jupyter Notebook files:
+It contains 3 Python/Jupyter Notebook files:
 1. def_statistics_CS.py - this file calculates the deforestation statistics used in the Chi-square analysis.
 2. LR_statistics_CS.py - this file calculates the LR (legal forest reserve) statistics used in the Chi-square analysis.
 3. duplicate_filter.ipynb - this file is used to identify suspected duplicates in the CAR database.
