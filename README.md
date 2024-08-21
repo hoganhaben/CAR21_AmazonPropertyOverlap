@@ -1,5 +1,8 @@
 # CAR21_AmazonPropertyOverlap
-This repository is for Paul Furumo et al. 2024 _PNAS_ "Land conflicts from overlapping claims in Brazil’s rural environmental registry"
+This repository is for Paul Furmuro, Jevan Yu, J. Aaron Hogan, Luis M. Tavares de Carvalho, Brenda Brito & Eric F. Lambin. 2024 "Land conflicts from overlapping claims in Brazil’s rural environmental registry" _PNAS_ **121(33)**:e2407357121.  [https://doi.org/10.1073/pnas.2407357121](https://doi.org/10.1073/pnas.2407357121)
+
+[![DOI](https://zenodo.org/badge/775467877.svg)](https://zenodo.org/doi/10.5281/zenodo.13356638)
+
 
 It contains 3 Python/Jupyter Notebook files:
 1. def_statistics_CS.py - this file calculates the deforestation statistics used in the Chi-square analysis.
